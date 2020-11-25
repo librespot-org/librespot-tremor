@@ -3,6 +3,8 @@ extern crate libc;
 
 use std::io::{self, Read, Seek};
 
+use tremor_sys::OggVorbis_File;
+
 /// Allows you to decode a sound file stream into packets.
 pub struct Decoder<R> where R: Read + Seek {
     // further informations are boxed so that a pointer can be passed to callbacks
@@ -140,16 +142,27 @@ impl<R> Decoder<R> where R: Read + Seek {
             data.reader.seek(io::SeekFrom::Current(0)).map(|v| v as libc::c_long).unwrap_or(-1)
         }
 
-        let callbacks = {
-            let mut callbacks: tremor_sys::ov_callbacks = unsafe { std::mem::zeroed() };
-            callbacks.read_func = read_func::<R>;
-            callbacks.seek_func = seek_func::<R>;
-            callbacks.tell_func = tell_func::<R>;
-            callbacks
+        extern fn close_func<R>(_datasource: *mut libc::c_void) -> libc::c_int
+            where R: Read + Seek
+        {
+            0
+        }
+
+        let callbacks = tremor_sys::ov_callbacks {
+            read_func: read_func::<R>,
+            seek_func: seek_func::<R>,
+            tell_func: tell_func::<R>,
+            close_func: close_func::<R>,
         };
 
+        const SIZE_OF_VORBIS: usize = std::mem::size_of::<OggVorbis_File>();
         let mut data = Box::new(DecoderData {
-            vorbis: unsafe { std::mem::uninitialized() },
+            vorbis: unsafe {
+                //mem::zeroed not allowed here, so transmute from empty mem.
+                //UB, but this needs to be initialized from C.
+                //TODO: switch data to maybe uninit
+                std::mem::transmute::<[u8; SIZE_OF_VORBIS], OggVorbis_File>([0u8; SIZE_OF_VORBIS])
+            },
             reader: input,
             current_logical_bitstream: 0,
             read_error: None,
