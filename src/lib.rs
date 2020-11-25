@@ -155,9 +155,9 @@ impl<R> Decoder<R> where R: Read + Seek {
             close_func: close_func::<R>,
         };
 
-        const SIZE_OF_VORBIS: usize = std::mem::size_of::<OggVorbis_File>();
         let mut data = Box::new(DecoderData {
             vorbis: unsafe {
+                const SIZE_OF_VORBIS: usize = std::mem::size_of::<OggVorbis_File>();
                 //mem::zeroed not allowed here, so transmute from empty mem.
                 //UB, but this needs to be initialized from C.
                 //TODO: switch data to maybe uninit
